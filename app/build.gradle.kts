@@ -83,6 +83,19 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("FIREBASE_SERVICE_ACCOUNT_KEY")
+  ignoreList.add("DATABASE_URL")
+  ignoreList.add("ADMIN_SESSION_SECRET")
+  ignoreList.add("ADMIN_EMAILS")
+  ignoreList.add("FIREBASE_PROJECT_ID")
+  ignoreList.add("FIREBASE_DATABASE_ID")
+  ignoreList.add("NEXT_PUBLIC_.*")
+  ignoreList.add("NEXT_PUBLIC_FIREBASE_API_KEY")
+  ignoreList.add("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN")
+  ignoreList.add("NEXT_PUBLIC_FIREBASE_PROJECT_ID")
+  ignoreList.add("NEXT_PUBLIC_FIREBASE_APP_ID")
+  ignoreList.add("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET")
+  ignoreList.add("NEXT_PUBLIC_APP_URL")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
