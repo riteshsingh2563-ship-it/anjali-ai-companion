@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<resources>
+    <!-- Change to your named database ID if using multi-database Firestore, or keep (default) -->
+    <string name="firestore_database_id" translatable="false">(default)</string>
+    <!-- Optional: Add your reCAPTCHA Enterprise site key if using App Check on physical devices -->
+    <string name="recaptcha_site_key" translatable="false"></string>
+</resources>

@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1: Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidLanguage(lang) {
+      return lang is string && (lang == 'English' || lang == 'Hinglish' || lang == 'Hindi');
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // Validation Blueprint: Conversation
+    function isValidConversation(data, userId) {
+      return data.userId is string && data.userId == request.auth.uid && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             isValidLanguage(data.language) &&
+             data.lastMessagePreview is string && data.lastMessagePreview.size() <= 500 &&
+             data.messageCount is int && data.messageCount >= 0 && data.messageCount <= 10000 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Validation Blueprint: ChatMessage
+    function isValidChatMessage(data, userId, conversationId) {
+      return data.userId is string && data.userId == request.auth.uid && data.userId == userId &&
+             data.conversationId is string && data.conversationId == conversationId &&
+             data.sender is string && (data.sender == 'user' || data.sender == 'anjali') &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 8000 &&
+             isValidLanguage(data.language) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    // Validation Blueprint: MemoryItem
+    function isValidMemoryItem(data, userId) {
+      return data.userId is string && data.userId == request.auth.uid && data.userId == userId &&
+             data.fact is string && data.fact.size() >= 1 && data.fact.size() <= 300 &&
+             data.category is string && (
+               data.category == 'personal' ||
+               data.category == 'preference' ||
+               data.category == 'goal' ||
+               data.category == 'interest'
+             ) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Validation Blueprint: UserPreferences
+    function isValidUserPreferences(data, userId) {
+      return data.userId is string && data.userId == request.auth.uid && data.userId == userId &&
+             isValidLanguage(data.preferredLanguage) &&
+             data.memoryEnabled is bool &&
+             data.expressiveTone is string && (
+               data.expressiveTone == 'Warm & Friendly' ||
+               data.expressiveTone == 'Playful & Witty' ||
+               data.expressiveTone == 'Calm & Supportive'
+             ) &&
+             data.onboardingCompleted is bool &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // Collection: Conversations
+    match /users/{userId}/conversations/{conversationId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(conversationId) && existing().userId == request.auth.uid;
+      allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(conversationId) &&
+                       incoming().keys().hasAll(['userId', 'title', 'language', 'lastMessagePreview', 'messageCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'title', 'language', 'lastMessagePreview', 'messageCount', 'createdAt', 'updatedAt']) &&
+                       isValidConversation(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(conversationId) &&
+                       isValidConversation(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['title', 'language', 'lastMessagePreview', 'messageCount', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(conversationId) && existing().userId == request.auth.uid;
+
+      // Subcollection: Messages
+      match /messages/{messageId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(conversationId) && isValidId(messageId) && existing().userId == request.auth.uid;
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid && existing().conversationId == conversationId;
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(conversationId) &&
+                         isValidId(messageId) &&
+                         incoming().keys().hasAll(['userId', 'conversationId', 'sender', 'text', 'language', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'conversationId', 'sender', 'text', 'language', 'createdAt']) &&
+                         isValidChatMessage(incoming(), userId, conversationId);
+
+        // Messages are append-only; users can delete messages/conversations but not rewrite history
+        allow update: if false;
+
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(conversationId) && isValidId(messageId) && existing().userId == request.auth.uid;
+      }
+    }
+
+    // Collection: Memories
+    match /users/{userId}/memories/{memoryId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(memoryId) && existing().userId == request.auth.uid;
+      allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(memoryId) &&
+                       incoming().keys().hasAll(['userId', 'fact', 'category', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'fact', 'category', 'createdAt', 'updatedAt']) &&
+                       isValidMemoryItem(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(memoryId) &&
+                       isValidMemoryItem(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['fact', 'category', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(memoryId) && existing().userId == request.auth.uid;
+    }
+
+    // Collection: User Settings / Preferences
+    match /users/{userId}/settings/{settingId} {
+      allow get: if isOwner(userId) && isValidId(userId) && isValidId(settingId) && existing().userId == request.auth.uid;
+      allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(settingId) &&
+                       incoming().keys().hasAll(['userId', 'preferredLanguage', 'memoryEnabled', 'expressiveTone', 'onboardingCompleted', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'preferredLanguage', 'memoryEnabled', 'expressiveTone', 'onboardingCompleted', 'updatedAt']) &&
+                       isValidUserPreferences(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidId(settingId) &&
+                       isValidUserPreferences(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['preferredLanguage', 'memoryEnabled', 'expressiveTone', 'onboardingCompleted', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId) && isValidId(settingId) && existing().userId == request.auth.uid;
+    }
+
+    // Collection: App Configuration (Public read-only for dynamic backend AI model & provider config)
+    match /app_config/{configId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+  }
+}

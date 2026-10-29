@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Anjali</string>
+    <string name="ai_companion_badge">Your Bestie 💕</string>
+    <string name="ai_disclosure_banner">Anjali is your virtual bestie and artificial intelligence companion. Your conversations are securely synced to your personal account.</string>
+    <string name="sign_in_with_google">Continue with Google</string>
+    <string name="welcome_subtitle">Your Bestie</string>
+    <string name="nav_chat">Chat</string>
+    <string name="nav_profile">Profile</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+    <string name="chat_input_placeholder">Type a message...</string>
+    <string name="send_message_desc">Send message</string>
+    <string name="new_chat_desc">Start new conversation</string>
+    <string name="ai_character_footer">Anjali is your virtual bestie (AI character).</string>
+</resources>

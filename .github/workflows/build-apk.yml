@@ -1,0 +1,110 @@
+name: Build & Release Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configure Android SDK
+        run: |
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "/usr/local/lib/android/sdk/platform-tools" >> $GITHUB_PATH
+
+      - name: Install Android SDK Components
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Setup google-services.json
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+          elif [ ! -f app/google-services.json ]; then
+            cp app/google-services.json.example app/google-services.json
+          fi
+
+      - name: Ensure Debug Keystore
+        run: |
+          if [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Ensure Executable Gradlew
+        run: |
+          gradle wrapper --gradle-version 9.3.1 || true
+          chmod +x gradlew
+
+      - name: Build Android APK
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK Asset
+        id: apk_asset
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "Error: No APK found after build!"
+            exit 1
+          fi
+          RELEASE_APK="app/build/outputs/apk/debug/Anjali-Ai-v1.0.1.apk"
+          cp "$APK_PATH" "$RELEASE_APK"
+          echo "apk_path=$RELEASE_APK" >> $GITHUB_OUTPUT
+          ls -lh "$RELEASE_APK"
+
+      - name: Create GitHub Release & Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.1
+          name: "Anjali AI v1.0.1 (Nemotron 30B & Token Fix)"
+          body: |
+            ## Anjali AI Companion — Update v1.0.1 🌸
+
+            ### What's New & Fixed:
+            - **Nemotron 30B AI Engine:** Full support for `nvidia/nemotron-3.5-lightning-30b-a3b` with 2048 token allocation.
+            - **Fixed "Firebase App token is Invalid" Error:** Firebase Vertex AI App Check failures are now safely guarded with a companion friendly fallback instead of crashing into a raw error dialog.
+            - **Extended Reasoning Timeout:** Increased request timeout to 40 seconds to give complex Hinglish reasoning responses ample time to generate.
+            - **Decommissioned Model Cleanup:** Removed inactive/decommissioned fallback models.
+
+            ### Download & Installation:
+            Download **`Anjali-Ai-v1.0.1.apk`** below and tap to install on your Android device.
+          files: ${{ steps.apk_asset.outputs.apk_path }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
